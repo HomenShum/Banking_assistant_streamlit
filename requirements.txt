@@ -1,0 +1,16 @@
+streamlit
+pandas
+numpy
+unstructured
+unstructured[pdf]
+unstructured[docx]
+llama_index
+openpyxl
+xlsxwriter
+rank-bm25
+cohere
+llmsherpa
+camelot-py
+llama-hub
+PyMuPDF
+ghostscript
