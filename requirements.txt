@@ -14,3 +14,4 @@ camelot-py
 llama-hub
 PyMuPDF
 ghostscript
+opencv-python-headless
