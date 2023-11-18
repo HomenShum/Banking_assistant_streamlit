@@ -12,17 +12,23 @@ Comprehensive Data Analysis: Provides detailed summaries, insights, and relevant
 Streamlit Integration: Leverages Streamlit for an intuitive and responsive user interface.
 Installation
 Clone the repository:
-"""
-"""
+
+
+
+
 git clone [repository-url]
 Install dependencies:
-"""
-"""
+
+
+
+
 pip install -r requirements.txt
 Usage
 Launch the Streamlit app:
-"""
-"""
+
+
+
+
 streamlit run app.py
 Upload PDF documents via the user interface.
 Use the chat interface to input queries and receive AI-generated insights and summaries based on the PDF content.
