@@ -632,171 +632,170 @@ st.container()
 
 query_engine = None
 
-with st.container():
-    st.header("Chat with your PDFs!")
-    st.subheader("Select your PDF document to chat with.")
-    st.write("Only support chatting with either 'all' or one document at a time.")
-    st.write("'all' works best with a single document domain.")
-    print("\nall_documents_node_storage.keys()", list(st.session_state.all_documents_node_storage.keys()))
+st.header("Chat with your PDFs!")
+st.subheader("Select your PDF document to chat with.")
+st.write("Only support chatting with either 'all' or one document at a time.")
+st.write("'all' works best with a single document domain.")
+print("\nall_documents_node_storage.keys()", list(st.session_state.all_documents_node_storage.keys()))
 
-    options = list(st.session_state.all_documents_node_storage.keys())
-    st.session_state.selected_doc = st.selectbox("Select a document or all", options, index=options.index(st.session_state.selected_doc) if st.session_state.selected_doc in options else 0)
-    selected_doc = st.session_state.selected_doc
+options = list(st.session_state.all_documents_node_storage.keys())
+st.session_state.selected_doc = st.selectbox("Select a document or all", options, index=options.index(st.session_state.selected_doc) if st.session_state.selected_doc in options else 0)
+selected_doc = st.session_state.selected_doc
 
-    # selected_doc = st.selectbox("Select a document or all", options=list(all_documents_node_storage.keys()))
-    print("\nselected_doc", selected_doc)
-    
-    company_vector_index = VectorStoreIndex(st.session_state.all_documents_node_storage[selected_doc])
-    company_vector_retriever = company_vector_index.as_retriever(similarity_top_k=2)
-    
-    # Ensure this is a dictionary
-    query_engine_dict = st.session_state.global_df_id_query_engine_mapping.get(selected_doc, {})
+# selected_doc = st.selectbox("Select a document or all", options=list(all_documents_node_storage.keys()))
+print("\nselected_doc", selected_doc)
 
-    # Debugging: Check the type of query_engine_dict
-    print("\nType of query_engine_dict:", type(query_engine_dict))
+company_vector_index = VectorStoreIndex(st.session_state.all_documents_node_storage[selected_doc])
+company_vector_retriever = company_vector_index.as_retriever(similarity_top_k=2)
 
-    recursive_retriever = RecursiveRetriever(
-        "vector",
-        retriever_dict={"vector": company_vector_retriever},
-        query_engine_dict=query_engine_dict,
-        verbose=True,
-    )
-    response_synthesizer = get_response_synthesizer(
-        # service_context=service_context,
-        response_mode="compact"
-    )
+# Ensure this is a dictionary
+query_engine_dict = st.session_state.global_df_id_query_engine_mapping.get(selected_doc, {})
 
-    query_engine = RetrieverQueryEngine.from_args(
-        recursive_retriever, response_synthesizer=response_synthesizer
-    )
-    
+# Debugging: Check the type of query_engine_dict
+print("\nType of query_engine_dict:", type(query_engine_dict))
 
-    if st.session_state.get("messages") is None:
-        # add user or assistant messages
-        st.session_state.messages = []
-    if st.session_state.get("chat_convo_memory") is None:
-        # add all outputs to the chat memory and label properly according to context
-        st.session_state.chat_convo_memory = []
-    if st.session_state.get("summary") is None:
-        # chat session summary: summarize the entire conversation to list the main points
-        st.session_state.summary = []
-        st.session_state.summary.append("")
-    if st.session_state.get("company_data") is None:
-        # store company data pulled from the PDFs
-        st.session_state.company_data = []
-        st.session_state.company_data.append("")
+recursive_retriever = RecursiveRetriever(
+    "vector",
+    retriever_dict={"vector": company_vector_retriever},
+    query_engine_dict=query_engine_dict,
+    verbose=True,
+)
+response_synthesizer = get_response_synthesizer(
+    # service_context=service_context,
+    response_mode="compact"
+)
 
-    if query := st.chat_input("What would you like to learn from your PDF/s?"):
-        # add user messages
-        st.session_state.messages.append({"role": "user", "content": query})
-        query_dict = {"user query": query} # for query_company_data function  
-        print("\nquery_dict", query_dict)
-        with st.chat_message("user"):
+query_engine = RetrieverQueryEngine.from_args(
+    recursive_retriever, response_synthesizer=response_synthesizer
+)
+
+
+if st.session_state.get("messages") is None:
+    # add user or assistant messages
+    st.session_state.messages = []
+if st.session_state.get("chat_convo_memory") is None:
+    # add all outputs to the chat memory and label properly according to context
+    st.session_state.chat_convo_memory = []
+if st.session_state.get("summary") is None:
+    # chat session summary: summarize the entire conversation to list the main points
+    st.session_state.summary = []
+    st.session_state.summary.append("")
+if st.session_state.get("company_data") is None:
+    # store company data pulled from the PDFs
+    st.session_state.company_data = []
+    st.session_state.company_data.append("")
+
+if query := st.chat_input("What would you like to learn from your PDF/s?"):
+    # add user messages
+    st.session_state.messages.append({"role": "user", "content": query})
+    query_dict = {"user query": query} # for query_company_data function  
+    print("\nquery_dict", query_dict)
+    with st.chat_message("user"):
+        st.markdown(st.session_state.messages[-1]["content"])
+
+    with st.chat_message("assistant"):                
+        # Use the selected query engine
+        message_placeholder = st.empty()
+        full_response_first_message = ""
+        for response in client.chat.completions.create(
+            model="gpt-3.5-turbo-1106",
+            messages=[
+                {"role": "system", "content": f"Appreicate user for the document selected: {selected_doc}. Ask user to wait while data processing is happening. Then assist user by providing a summary with summary_query_response if user asks to 'Provide a summary for selected document or all adocuments, such as when user asks 'summarize', 'tell me about the document' or 'what is this document about'.'. Or provide 'specific document detail, not for 'tell me about the document' or 'summarize all documents' using function specific_query_response' Otherwise, respond as usual with system promt: {document_analysis_system_prompt}"},
+                {"role": "user", "content": query},
+            ],
+            stream=True,
+        ):
+            full_response_first_message += str(response.choices[0].delta.content)
+            message_placeholder.markdown(full_response_first_message + "▌")
+        st.session_state.messages.append({"role": "assistant", "content": full_response_first_message})
+        message_placeholder.markdown(st.session_state.messages[-1]["content"])
+
+        assistant_messages = [{"role": "user", "content": f"User Need: {query}"}]
+        print("\nassistant_messages", assistant_messages)
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "specific_query_response",
+                    "description": "specific document detail, not for 'tell me about the document' or 'summarize all documents'.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The user's query for detailed information."
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "summary_query_response",
+                    "description": "Provide a summary for selected document or all adocuments, such as when user asks 'summarize', 'tell me about the document' or 'what is this document about'.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The user's query for a summary of the document(s)."
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            }
+        ]
+        tool_call_response = client.chat.completions.create(
+            model="gpt-3.5-turbo-1106",
+            messages=assistant_messages,
+            tools=tools,
+            tool_choice="auto",  # auto is default, but we'll be explicit
+        )
+        tool_call_response_message = tool_call_response.choices[0].message
+        print("\ntool_call_response_message", tool_call_response_message)
+        tool_calls = tool_call_response_message.tool_calls
+
+        if tool_calls:
+            available_functions = {
+                "specific_query_response": specific_query_response,
+                "summary_query_response": summary_query_response,
+            }
+            assistant_messages.append({"role": "assistant", "content": tool_call_response_message.content})  # extend conversation with assistant's reply
+            st.session_state.messages.append({"role": "assistant", "content": tool_call_response_message.content})
             st.markdown(st.session_state.messages[-1]["content"])
 
-        with st.chat_message("assistant"):                
-            # Use the selected query engine
-            message_placeholder = st.empty()
-            full_response_first_message = ""
-            for response in client.chat.completions.create(
-                model="gpt-3.5-turbo-1106",
-                messages=[
-                    {"role": "system", "content": f"Appreicate user for the document selected: {selected_doc}. Ask user to wait while data processing is happening. Then assist user by providing a summary with summary_query_response if user asks to 'Provide a summary for selected document or all adocuments, such as when user asks 'summarize', 'tell me about the document' or 'what is this document about'.'. Or provide 'specific document detail, not for 'tell me about the document' or 'summarize all documents' using function specific_query_response' Otherwise, respond as usual with system promt: {document_analysis_system_prompt}"},
-                    {"role": "user", "content": query},
-                ],
-                stream=True,
-            ):
-                full_response_first_message += str(response.choices[0].delta.content)
-                message_placeholder.markdown(full_response_first_message + "▌")
-            st.session_state.messages.append({"role": "assistant", "content": full_response_first_message})
-            message_placeholder.markdown(st.session_state.messages[-1]["content"])
-
-            assistant_messages = [{"role": "user", "content": f"User Need: {query}"}]
-            print("\nassistant_messages", assistant_messages)
-            tools = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "specific_query_response",
-                        "description": "specific document detail, not for 'tell me about the document' or 'summarize all documents'.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "The user's query for detailed information."
-                                }
-                            },
-                            "required": ["query"]
-                        }
+            for tool_call in tool_calls:
+                function_name = tool_call.function.name
+                function_to_call = available_functions.get(function_name)
+                if function_to_call:
+                    function_args = json.loads(tool_call.function.arguments)
+                    function_response = function_to_call(**function_args)
+                    assistant_message = {
+                        "tool_call_id": tool_call.id,
+                        "role": "function",
+                        "name": function_name,
+                        "content": function_response,
                     }
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "summary_query_response",
-                        "description": "Provide a summary for selected document or all adocuments, such as when user asks 'summarize', 'tell me about the document' or 'what is this document about'.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "The user's query for a summary of the document(s)."
-                                }
-                            },
-                            "required": ["query"]
-                        }
-                    }
-                }
-            ]
-            tool_call_response = client.chat.completions.create(
-                model="gpt-3.5-turbo-1106",
-                messages=assistant_messages,
-                tools=tools,
-                tool_choice="auto",  # auto is default, but we'll be explicit
-            )
-            tool_call_response_message = tool_call_response.choices[0].message
-            print("\ntool_call_response_message", tool_call_response_message)
-            tool_calls = tool_call_response_message.tool_calls
+                    assistant_messages.append(assistant_message)  # extend conversation with function response
+                    # append:
+                    # {"role": "system", "content": "Chat Session Summary (Track progress of conversation): " + str(st.session_state.summary[-1])},
+                    # {"role": "system", "content": "Latest Company Data from PDF (Check if any new updates): " + str(st.session_state.company_data[-1])},                    
+                    assistant_messages.append({"role": "system", "content": "Chat Session Summary (Track progress of conversation): " + str(st.session_state.summary[-1])})
+                    assistant_messages.append({"role": "system", "content": "Latest Company Data from PDF (Check if any new updates): " + str(st.session_state.company_data[-1])})
+                    print("\nassistant_messages before second response", assistant_messages)
+                    st.session_state.messages.append({"role": "assistant", "content": assistant_message["content"]})
+                    st.markdown(st.session_state.messages[-1]["content"])
 
-            if tool_calls:
-                available_functions = {
-                    "specific_query_response": specific_query_response,
-                    "summary_query_response": summary_query_response,
-                }
-                assistant_messages.append({"role": "assistant", "content": tool_call_response_message.content})  # extend conversation with assistant's reply
-                st.session_state.messages.append({"role": "assistant", "content": tool_call_response_message.content})
-                st.markdown(st.session_state.messages[-1]["content"])
-
-                for tool_call in tool_calls:
-                    function_name = tool_call.function.name
-                    function_to_call = available_functions.get(function_name)
-                    if function_to_call:
-                        function_args = json.loads(tool_call.function.arguments)
-                        function_response = function_to_call(**function_args)
-                        assistant_message = {
-                            "tool_call_id": tool_call.id,
-                            "role": "function",
-                            "name": function_name,
-                            "content": function_response,
-                        }
-                        assistant_messages.append(assistant_message)  # extend conversation with function response
-                        # append:
-                        # {"role": "system", "content": "Chat Session Summary (Track progress of conversation): " + str(st.session_state.summary[-1])},
-                        # {"role": "system", "content": "Latest Company Data from PDF (Check if any new updates): " + str(st.session_state.company_data[-1])},                    
-                        assistant_messages.append({"role": "system", "content": "Chat Session Summary (Track progress of conversation): " + str(st.session_state.summary[-1])})
-                        assistant_messages.append({"role": "system", "content": "Latest Company Data from PDF (Check if any new updates): " + str(st.session_state.company_data[-1])})
-                        print("\nassistant_messages before second response", assistant_messages)
-                        st.session_state.messages.append({"role": "assistant", "content": assistant_message["content"]})
-                        st.markdown(st.session_state.messages[-1]["content"])
-
-                second_response = client.chat.completions.create(
-                    model="gpt-4-1106-preview",
-                    messages=[{"role": "assistant", "content": str(assistant_messages)}],
-                )  # get a new response from the model where it can see the function response
-                st.session_state.messages.append({"role": "assistant", "content": second_response.choices[0].message.content.strip()})
-                st.markdown(st.session_state.messages[-1]["content"])
-                print("\nsecond_response content:", st.session_state.messages[-1]["content"])
+            second_response = client.chat.completions.create(
+                model="gpt-4-1106-preview",
+                messages=[{"role": "assistant", "content": str(assistant_messages)}],
+            )  # get a new response from the model where it can see the function response
+            st.session_state.messages.append({"role": "assistant", "content": second_response.choices[0].message.content.strip()})
+            st.markdown(st.session_state.messages[-1]["content"])
+            print("\nsecond_response content:", st.session_state.messages[-1]["content"])
               
 
 # Reset Button
